@@ -485,6 +485,95 @@ class AuthDialog(QDialog):
                     QMessageBox.information(self, "Success", "Sign In successful!")
                     self.accept()
 
+# --- Login Choice Dialog ---
+class LoginChoiceDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Choose Login Method")
+        self.setFixedSize(320, 180)
+        layout = QVBoxLayout(self)
+        label = QLabel("How would you like to login?")
+        label.setAlignment(Qt.AlignCenter)
+        label.setFont(QFont("Arial", 14, QFont.Bold))
+        layout.addWidget(label)
+        btn_email = QPushButton("Login with Email")
+        btn_phone = QPushButton("Login with Phone Number")
+        btn_email.setMinimumHeight(40)
+        btn_phone.setMinimumHeight(40)
+        btn_email.setStyleSheet("background:#00ff99; color:#000; font-weight:bold; border-radius:10px;")
+        btn_phone.setStyleSheet("background:#00b894; color:#fff; font-weight:bold; border-radius:10px;")
+        layout.addWidget(btn_email)
+        layout.addWidget(btn_phone)
+        self.chosen = None
+        btn_email.clicked.connect(lambda: self.choose("email"))
+        btn_phone.clicked.connect(lambda: self.choose("phone"))
+
+    def choose(self, method):
+        self.chosen = method
+        self.accept()
+        
+# --- Phone Login Dialog ---
+class PhoneLoginDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Login with Phone Number")
+        self.setFixedSize(350, 220)
+        layout = QVBoxLayout(self)
+        label = QLabel("Enter your phone number:")
+        label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(label)
+        self.phone_edit = QLineEdit()
+        self.phone_edit.setPlaceholderText("Enter Phone Number")
+        layout.addWidget(self.phone_edit)
+        self.otp_edit = QLineEdit()
+        self.otp_edit.setPlaceholderText("Enter OTP")
+        self.otp_edit.setMaxLength(6)
+        self.otp_edit.hide()
+        layout.addWidget(self.otp_edit)
+        self.request_otp_btn = QPushButton("Request OTP")
+        self.request_otp_btn.clicked.connect(self.request_otp)
+        layout.addWidget(self.request_otp_btn)
+        self.verify_btn = QPushButton("Verify OTP")
+        self.verify_btn.clicked.connect(self.verify_otp)
+        self.verify_btn.hide()
+        layout.addWidget(self.verify_btn)
+        self.logged_in_name = None
+        self.generated_otp = None
+
+    def request_otp(self):
+        import random
+        phone = self.phone_edit.text().strip()
+        if not phone or len(phone) < 8:
+            QMessageBox.warning(self, "Error", "Please enter a valid phone number.")
+            return
+        # Generate a 6-digit OTP
+        self.generated_otp = f"{random.randint(100000, 999999)}"
+        # In production, send OTP via SMS API here
+        print(f"OTP for {phone} is {self.generated_otp}")  # For demo, print to console
+        QMessageBox.information(self, "OTP Sent", f"OTP has been sent to {phone}.\n(For demo: {self.generated_otp})")
+        self.otp_edit.show()
+        self.verify_btn.show()
+        self.request_otp_btn.setEnabled(False)
+
+    def verify_otp(self):
+        otp = self.otp_edit.text().strip()
+        if otp == self.generated_otp:
+            # Find user by phone in local DB
+            import sqlite3
+            conn = sqlite3.connect("users.db")
+            c = conn.cursor()
+            c.execute("SELECT * FROM users WHERE phone = ?", (self.phone_edit.text().strip(),))
+            user = c.fetchone()
+            conn.close()
+            if user:
+                self.logged_in_name = user[2]  # name
+                QMessageBox.information(self, "Success", "Sign In successful!")
+                self.accept()
+            else:
+                QMessageBox.warning(self, "Error", "Phone number not registered.")
+        else:
+            QMessageBox.warning(self, "Error", "Invalid OTP!")
+
 # --- Serial Reader ---
 class SerialECGReader:
     def __init__(self, port, baudrate):
@@ -1112,6 +1201,56 @@ class MainMenu(QWidget):
         overlay_layout.addWidget(self.guest_btn)
         overlay_layout.addSpacing(30)
         
+        # --- Login with Email button (hidden initially) ---
+        self.login_email_btn = QPushButton("Login with Email")
+        self.login_email_btn.setMinimumHeight(48)
+        self.login_email_btn.setFont(QFont("Arial", 16, QFont.Bold))
+        self.login_email_btn.setCursor(Qt.PointingHandCursor)
+        self.login_email_btn.setStyleSheet("""
+            QPushButton {
+                background: #00b894;
+                color: #fff;
+                border-radius: 24px;
+                padding: 12px 36px;
+                font-size: 18px;
+                font-weight: bold;
+                border: 2px solid #00ff99;
+            }
+            QPushButton:hover {
+                background: #00ff99;
+                color: #000;
+                border: 2px solid #00ff99;
+            }
+        """)
+        self.login_email_btn.hide()
+        self.login_email_btn.clicked.connect(self.show_email_login)
+        overlay_layout.addWidget(self.login_email_btn)
+
+        # --- Login with Phone button (hidden initially) ---
+        self.login_phone_btn = QPushButton("Login with Phone Number")
+        self.login_phone_btn.setMinimumHeight(48)
+        self.login_phone_btn.setFont(QFont("Arial", 16, QFont.Bold))
+        self.login_phone_btn.setCursor(Qt.PointingHandCursor)
+        self.login_phone_btn.setStyleSheet("""
+            QPushButton {
+                background: #00b894;
+                color: #fff;
+                border-radius: 24px;
+                padding: 12px 36px;
+                font-size: 18px;
+                font-weight: bold;
+                border: 2px solid #00ff99;
+            }
+            QPushButton:hover {
+                background: #00ff99;
+                color: #000;
+                border: 2px solid #00ff99;
+            }
+        """)
+        self.login_phone_btn.hide()
+        self.login_phone_btn.clicked.connect(self.show_phone_login)
+        overlay_layout.addWidget(self.login_phone_btn)
+        
         # --- Sign Out Button ---
         self.signout_btn = QPushButton("Sign Out")
         self.signout_btn.setFont(QFont("Arial", 14, QFont.Bold))
@@ -1194,7 +1333,9 @@ class MainMenu(QWidget):
         overlay.raise_()
         self.overlay = overlay
         
-    def show_auth_dialog(self):
+    def show_email_login(self):
+        self.login_email_btn.hide()
+        self.login_phone_btn.hide()
         dlg = AuthDialog()
         if dlg.exec_() == QDialog.Accepted:
             user_name = dlg.logged_in_name
@@ -1204,10 +1345,38 @@ class MainMenu(QWidget):
                 self.signout_btn.show()
                 for btn in self.buttons:
                     btn.show()
+        else:
+            # If cancelled, show the login method buttons again
+            self.login_email_btn.show()
+            self.login_phone_btn.show()
+
+    def show_phone_login(self):
+        self.login_email_btn.hide()
+        self.login_phone_btn.hide()
+        dlg = PhoneLoginDialog()
+        if dlg.exec_() == QDialog.Accepted:
+            user_name = dlg.logged_in_name
+            if user_name:
+                self.user_label.setText(f"Welcome, {user_name}!")
+                self.guest_btn.hide()
+                self.signout_btn.show()
+                for btn in self.buttons:
+                    btn.show()
+        else:
+            # If cancelled, show the login method buttons again
+            self.login_email_btn.show()
+            self.login_phone_btn.show()
+        
+    def show_auth_dialog(self):
+        self.guest_btn.hide()
+        self.login_email_btn.show()
+        self.login_phone_btn.show()
                 
     def sign_out(self):
         self.user_label.setText("")
         self.guest_btn.show()
+        self.login_email_btn.hide()
+        self.login_phone_btn.hide()
         self.signout_btn.hide()
         for btn in self.buttons:
             btn.hide()
